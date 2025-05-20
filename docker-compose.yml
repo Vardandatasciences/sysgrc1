@@ -1,0 +1,46 @@
+version: '3.9'
+
+services:
+  db:
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_DATABASE: vardaan
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  django:
+    build: .
+    command: sh -c "
+      python manage.py wait_for_db &&
+      python manage.py migrate &&
+      python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: db
+      DB_NAME: vardaan
+      DB_USER: root
+      DB_PASSWORD: root
+    depends_on:
+      db:
+        condition: service_healthy
+
+  cypress:
+    image: cypress/included:13.1.0
+    working_dir: /e2e
+    volumes:
+      - .:/e2e
+    depends_on:
+      - django
+    environment:
+      CYPRESS_baseUrl: http://django:8000
+    command: ["npx", "cypress", "run"]
